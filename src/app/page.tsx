@@ -10,7 +10,7 @@ export default function Home() {
       <section className="space-y-2">
         <GamesList />
       </section>
-      <footer className="text-xs text-gray-500 pt-8 border-t">Built with Next.js & Convex.</footer>
+      <footer className="text-xs text-gray-500 pt-8 border-t">Built with Next.js & Convex</footer>
     </main>
   );
 }
