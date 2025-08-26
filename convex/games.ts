@@ -20,7 +20,7 @@ export const list = query({
 });
 
 export const create = mutation({
-  args: { player: v.string() },
+  args: { player: v.string(), mode: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const emptyBoard = Array.from({ length: 6 }, () => Array(7).fill(""));
     const profile = await ctx.db
@@ -30,6 +30,7 @@ export const create = mutation({
     const id = await ctx.db.insert("games", {
       createdAt: Date.now(),
       status: "waiting",
+      mode: args.mode || "friend",
       currentPlayer: args.player,
       winner: undefined,
       board: emptyBoard,
@@ -39,6 +40,51 @@ export const create = mutation({
       player2Name: undefined,
     });
     return id;
+  },
+});
+
+// Auto-match: find an existing waiting auto game not created by this player; otherwise create one.
+export const autoMatch = mutation({
+  args: { player: v.string() },
+  handler: async (ctx, args) => {
+    // Find a waiting game in auto mode
+    const candidates = await ctx.db
+      .query("games")
+      .withIndex("by_status_mode", (q) => q.eq("status", "waiting").eq("mode", "auto"))
+      .take(20);
+    for (const g of candidates) {
+      if (isExpiredWaitingGame(g)) {
+        await ctx.db.delete(g._id); // clean up dead game
+        continue;
+      }
+      if (g.player1 !== args.player && !g.player2) {
+        const profile = await ctx.db
+          .query("profiles")
+          .withIndex("by_playerId", (q) => q.eq("playerId", args.player))
+          .unique();
+        await ctx.db.patch(g._id, { player2: args.player, player2Name: profile?.username, status: "active" });
+        return { gameId: g._id, matched: true };
+      }
+    }
+    // No suitable game; create one in auto mode
+    const emptyBoard = Array.from({ length: 6 }, () => Array(7).fill(""));
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.player))
+      .unique();
+    const id = await ctx.db.insert("games", {
+      createdAt: Date.now(),
+      status: "waiting",
+      mode: "auto",
+      currentPlayer: args.player,
+      winner: undefined,
+      board: emptyBoard,
+      player1: args.player,
+      player2: undefined,
+      player1Name: profile?.username,
+      player2Name: undefined,
+    });
+    return { gameId: id, matched: false };
   },
 });
 

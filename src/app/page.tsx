@@ -1,4 +1,4 @@
-import { GamesList } from "@/components/GamesList";
+import { Matchmaking } from "@/components/Matchmaking";
 
 export default function Home() {
   return (
@@ -8,7 +8,7 @@ export default function Home() {
         <p className="text-sm text-gray-500">Create or join a game. Everything updates in realtime via Convex.</p>
       </header>
       <section className="space-y-2">
-        <GamesList />
+        <Matchmaking />
       </section>
       <footer className="text-xs text-gray-500 pt-8 border-t">Built with Next.js & Convex</footer>
     </main>

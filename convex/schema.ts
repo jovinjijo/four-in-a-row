@@ -6,6 +6,7 @@ export default defineSchema({
   games: defineTable({
     createdAt: v.number(), // Date.now()
     status: v.string(), // waiting, active, finished
+    mode: v.optional(v.string()), // friend | auto (default friend for legacy rows)
     currentPlayer: v.string(), // player1 / player2
     winner: v.optional(v.string()),
     board: v.array(v.array(v.string())), // 6 rows x 7 cols, values: '', 'R', 'Y'
@@ -14,7 +15,10 @@ export default defineSchema({
     player1Name: v.optional(v.string()),
     player2Name: v.optional(v.string()),
     winningCells: v.optional(v.array(v.array(v.number()))), // [[r,c], ...] when a win occurs
-  }).index("by_status", ["status"]).index("by_created", ["createdAt"]),
+  })
+    .index("by_status", ["status"]) // existing
+    .index("by_created", ["createdAt"]) // existing
+    .index("by_status_mode", ["status", "mode"]), // for auto-match queries
   moves: defineTable({
     gameId: v.id("games"),
     player: v.string(),
