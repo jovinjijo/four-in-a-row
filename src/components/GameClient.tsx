@@ -2,7 +2,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { usePlayerId } from "./usePlayerId";
-import { FourInARowBoard, ResponsiveFourInARowBoard } from "./FourInARowBoard";
+import { ResponsiveFourInARowBoard } from "./FourInARowBoard";
 import { useResizeObserver } from "./useResizeObserver";
 import Link from "next/link";
 import { Id } from "@convex/_generated/dataModel";

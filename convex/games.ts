@@ -1,9 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { isWaitingGameExpired as sharedIsExpired } from "../src/shared/expiry";
+import type { Doc, Id } from "./_generated/dataModel";
 
+// Minimal shape used for expiry checks; align with games doc fields accessed in helper
+type GameForExpiry = Pick<Doc<"games">, "createdAt" | "status" | "player2"> & { _id: Id<"games"> };
 // Delegate to shared helper (kept name locally for minimal diff where referenced)
-function isExpiredWaitingGame(game: any): boolean { return sharedIsExpired(game); }
+function isExpiredWaitingGame(game: GameForExpiry | null | undefined): boolean { return sharedIsExpired(game); }
 
 export const list = query({
   args: {},

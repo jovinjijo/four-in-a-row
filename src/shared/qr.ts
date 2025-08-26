@@ -13,8 +13,8 @@ export async function generateQrDataUrl(text: string): Promise<string> {
       const url = await mod.toDataURL(text, { width: 256, margin: 1 });
       if (typeof url === "string") return url;
     }
-  } catch (_err) {
-    // swallow and fallback
+  } catch {
+    // Swallow and fallback to plain text data URI.
   }
   return `data:text/plain,${encodeURIComponent(text)}`;
 }

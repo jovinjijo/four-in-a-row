@@ -6,7 +6,7 @@ import { generateQrDataUrl } from "../shared/qr";
 import { remainingWaitMs } from "../shared/expiry";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import type { Id, Doc } from "@convex/_generated/dataModel";
+import type { Id } from "@convex/_generated/dataModel";
 
 // QR generation handled by shared helper.
 

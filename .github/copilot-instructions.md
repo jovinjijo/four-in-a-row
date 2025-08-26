@@ -3,31 +3,36 @@
 These instructions capture the project-specific context so an AI agent can be productive immediately.
 
 ## 1. High-Level Architecture
-- Frontend: Next.js App Router (`src/app`) with Tailwind CSS (v4) for styling.
-- Backend (realtime & data): Convex functions in `convex/` (schema + queries + mutations) generating typed APIs in `convex/_generated/*` (NOT committed until `pnpm exec convex dev` runs).
-- Game Domain: Four-in-a-row (6x7 board) with documents stored in `games` table and `moves` table.
-  - `games` includes: `status` (`waiting|active|finished`), `currentPlayer` (player id string), `winner` (optional), `board` (2D array of tokens), `player1`, `player2`.
-  - `moves` capture the chronological action history with an index for ordering.
-- Client State: Players are anonymous; a persistent `playerId` is generated/stored in `localStorage` (`usePlayerId` hook) and passed to Convex mutations.
+- Frontend: Next.js App Router (`src/app`) + Tailwind CSS v4. Lobby uses `Matchmaking` component (no global public list).
+- Backend: Convex functions under `convex/` (schema + queries + mutations) with generated types in `convex/_generated/*` (not committed; run `pnpm exec convex dev`).
+- Game Domain: Four-in-a-row (6x7) stored in `games`, moves in `moves`, usernames in `profiles`.
+  - `games` fields: `status`, `mode` (`auto|friend`), `currentPlayer` (player id), `winner` (token), `board`, `player1/2`, optional `player1Name/2Name`, optional `winningCells`.
+  - `moves`: chronological history (`moveNumber`) for deterministic replays.
+  - `profiles`: claimed usernames (unique canonical lowercase index).
+- Client Identity: Anonymous ephemeral `playerId` in `localStorage` (via `usePlayerId` or local logic in `Matchmaking`). Not secure; avoid trusting for auth.
 
 ## 2. Key Directories & Files
-- `convex/schema.ts`: Source of truth for data model and indexes.
-- `convex/games.ts`: Game lifecycle functions (`list`, `create`, `join`, `get`).
-- `convex/moves.ts`: Mutation `play` and query `listForGame`; contains win detection logic.
-- `src/components/ConvexClientProvider.tsx`: Wraps the app with `ConvexProvider` (requires `NEXT_PUBLIC_CONVEX_URL`).
-- `src/components/GamesList.tsx`: Lobby UI (create/join + navigation to game pages).
-- `src/components/GameClient.tsx`: Main game runtime view (fetch game + moves, join, play turns).
-- `src/components/FourInARowBoard.tsx`: Presentational board component (`FourInARowBoard`) with adjustable cell size via `size` prop.
-- `src/app/game/[id]/page.tsx`: Dynamic game route.
-- `tsconfig.json`: Path aliases `@/*` -> `src/*`, `@convex/*` -> `convex/*`; uses `moduleResolution: node16` + `module: Node16` to satisfy Convex export maps.
+- `convex/schema.ts`: Data model & indexes (`games` + matchmaking indexes, `moves`, `profiles`).
+- `convex/games.ts`: Matchmaking + lifecycle: `create`, `autoMatch`, `join`, `get`, `activeForPlayer`, `waitingAutoForPlayer`.
+- `convex/moves.ts`: `play` mutation (turn validation, win/draw detection) + `listForGame` query.
+- `convex/profiles.ts`: Username claim logic (not originally documented; ensure kept consistent with uniqueness checks).
+- `src/components/Matchmaking.tsx`: Lobby UI (Auto Match, Friend Invite + QR, Active games list, username form, waiting overlays).
+- `src/components/GameClient.tsx`: Game runtime view (responsive board, join logic, move list).
+- `src/components/FourInARowBoard.tsx`: Board + `ResponsiveFourInARowBoard` wrapper.
+- `src/components/useResizeObserver.ts`: Hook powering responsive board sizing.
+- `src/shared/{constants,expiry,qr}.ts`: Shared constants, TTL helpers, QR generation.
+- `tsconfig.json`: Path aliases `@/*` and `@convex/*`; keep `moduleResolution: node16` and `module: Node16`.
 
 ## 3. Data & Logic Conventions
-- Board Representation: `string[][]` with cells: `""`, `"R"`, `"Y"`. New board created with 6 rows × 7 columns of empty strings.
-- Turn Tracking: `currentPlayer` holds the player id (not the token). The token maps as: player1 -> `R`, player2 -> `Y`.
-- Win Detection: Implemented in `convex/moves.ts` (`checkWinner`) scanning four directions; if found, mutation sets `status: "finished"` and `winner` to token (NOT player id).
-- Move Ordering: `moves` store incremental `moveNumber` derived from latest query (O(1) last read via descending order + `take(1)`).
-- Idempotency: `games.join` returns `{ alreadyIn: true }` if the caller is already a participant.
-- Client Queries: Skip pattern (`useQuery(api.fn, condition ? args : "skip")`) to defer queries until dependencies (like `playerId`) exist.
+- Board: `string[][]` 6×7; values `""`, `"R"`, `"Y"`.
+- Turn Tracking: `currentPlayer` = player id; derive token via role (player1→R, player2→Y).
+- Matchmaking Modes: `mode: 'auto' | 'friend'`. Auto mode scans `by_status_mode` index for waiting games; friend mode exposes QR link.
+- Win Detection: `checkWinner` in `moves.ts` returns winner token and cell coordinates (`winningCells`) stored in game.
+- Draw Detection: After each move if top row is full and no win → `status: finished` with no winner.
+- TTL: Waiting games expire at 5 minutes (`WAITING_GAME_TTL_MS`) if unjoined; filtered / deleted opportunistically.
+- Move Ordering: `moveNumber` incremental via last move query (`by_game` index, descending take(1)).
+- Idempotent Join: `games.join` returns `{ alreadyIn: true }` if player already present.
+- Live Query Skips: Use `"skip"` sentinel until prerequisites (e.g., `playerId`) ready.
 
 ## 4. Runtime & Dev Workflows
 - Install deps: `pnpm install`.
@@ -38,23 +43,28 @@ These instructions capture the project-specific context so an AI agent can be pr
 - Linting: `pnpm lint` (ESLint 9 + Next config). Type errors may hinge on correct `moduleResolution` settings.
 
 ## 5. Patterns & Gotchas
-- Always add new Convex functions under `convex/` and reference them through generated `api` (never hardcode paths to `_generated/server` elsewhere than server functions).
-- If TypeScript reports missing `convex/*` modules, ensure: (1) Convex server running, (2) `tsconfig` not reverted to `bundler` resolution.
-- Player identity is purely client-side; do NOT trust it for security—future auth would replace this.
-- When modifying board state server-side, always clone (`map([...row])`) before mutation to avoid mutating the existing object directly.
-- UI is intentionally minimal; accessibility: game pieces have `aria-label` (no letters on discs) and column buttons have labels.
-- Navigation after create/join is handled in `GamesList.tsx` using `router.push`; reuse that pattern for new lobby actions.
+- Always add new Convex functions under `convex/`; import via generated `api` in clients.
+- Missing generated modules? Ensure Convex dev process is running (codegen) and TS settings unchanged.
+- Never mutate the original `board` object directly—clone rows before edits.
+- Responsive board: keep `useResizeObserver` (and any custom hooks) above conditional early returns to avoid React hook order warnings.
+- Loading overlay: Set a `navigatingGameId` state before `router.push` to freeze UI (see `Matchmaking.tsx`).
+- TTL logic: Use `isWaitingGameExpired` / `remainingWaitMs` from `expiry.ts`; do not re‑implement.
+- QR generation: Use `generateQrDataUrl` wrapper; avoid importing `qrcode` directly in components.
+- Accessibility: Entire columns are clickable; maintain ARIA labels (`aria-label` on discs/columns). Avoid shrinking touch targets below ~40px.
 
 ## 6. Adding New Features (Examples)
-- Draw Detection: After inserting a move, if no winner and top row has no empty cells, set `status: "finished"` without `winner`.
-- Spectator Support: Allow third parties to view game; no schema change needed—just allow load without join.
-- Nicknames: Add `players` table or extend `games` with `player1Name`/`player2Name`; update mutations & UI accordingly.
-- Highlight Winning Discs: Return winning coordinates from `checkWinner` and store (e.g., `winningCells: [[r,c],...]`) in `games`.
+- Spectator Support: Allow non‑participant to open `/game/[id]`; render read‑only state (UI mostly present already).
+- Rematch Flow: Add mutation to create a fresh game copying opponent identities.
+- Resign: Mutation marking game finished with opposing winner or `null` (depending spec).
+- Game Replay: Query `moves` and simulate board progression client‑side.
+- Auth Integration: Replace ephemeral id with provider (update schema + server validation).
 
 ## 7. Code Style & Conventions
-- Typescript strict mode is ON (`strict: true`), minimally explicit `any` usage (Convex codegen provides types once running).
-- Prefer functional React components with hooks; client components start with `"use client"` when they depend on browser APIs or hooks.
-- Tailwind used for layout; avoid mixing inline styles except for dynamic sizing (board uses inline `style`).
+- TypeScript strict; avoid `any` (use generics, inference, or narrow `unknown`).
+- Client components require `"use client"` at top when using state/effects.
+- Tailwind utilities for static styles. Inline styles only for computed dimensions (board sizing/gaps) or dynamic animations.
+- Keep shared domain constants in `shared/constants.ts`.
+- Provide explicit return types for exported functions (especially in Convex code) when inference is unclear.
 
 ## 8. Safe Change Process
 1. Define schema/table changes in `convex/schema.ts`.
@@ -66,13 +76,18 @@ These instructions capture the project-specific context so an AI agent can be pr
 ## 9. Common Errors & Fixes
 | Symptom | Cause | Fix |
 |--------|-------|-----|
-| `Cannot find module './_generated/server'` | Convex codegen not run | Start `pnpm exec convex dev` |
-| `Cannot find module 'convex/...` | Wrong `moduleResolution` | Keep `node16` + `module: Node16` in `tsconfig.json` |
-| Join button does nothing | Mutation success but no navigation | Ensure `router.push` after join/create |
-| Pieces not updating | Stale board | Confirm mutation patches game & query not skipped |
+| `Cannot find module './_generated/server'` | Convex dev not running | Start `pnpm exec convex dev` |
+| `Cannot find module 'convex/...` | TS module settings changed | Ensure `module: Node16` & `moduleResolution: node16` |
+| Hook order warning | Hook after conditional return | Move hook before returns |
+| Auto match never starts | No second player joined | Wait or open second browser/session |
+| Column click inert | Not your turn / game finished | Check `currentPlayer` & `status` |
+| QR fails to render | Dynamic import failure | Fallback data URI already returned (investigate network) |
 
 ## 10. When Extending
-Provide migrations via updating schema; keep indexes minimal (currently: `games` has `by_created`, `by_status`; `moves` has composite `by_game`). Add indexes before introducing heavy filtered queries.
+- Schema First: Add needed fields & indexes in `schema.ts` then run Convex dev.
+- Index Strategy: Add narrowly scoped indexes (e.g., composite for status+mode) before writing filtered queries that would scan large sets.
+- Shared Logic: Consolidate expiry / sizing / QR helpers; avoid duplication.
+- Testing (future): Introduce unit tests for `checkWinner` & expiry in a dedicated test folder; keep logic pure to ease testing.
 
 ---
-If something here seems outdated after your change, update this file in the same PR.
+If something here drifts from reality after your change, update this file in the same PR to prevent assistant decay.
