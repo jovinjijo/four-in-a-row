@@ -27,6 +27,7 @@ export function Matchmaking() {
   const [inviteGameId, setInviteGameId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [autoGameId, setAutoGameId] = useState<string | null>(null);
+  const [navigatingGameId, setNavigatingGameId] = useState<string | null>(null);
   // Auto-match waiting state
   const waitingAutoGame = useQuery(api.games.waitingAutoForPlayer, playerId ? { player: playerId } : "skip");
   const activeGames = useQuery(api.games.activeForPlayer, playerId ? { player: playerId } : "skip");
@@ -52,14 +53,19 @@ export function Matchmaking() {
   const autoGame = useQuery(api.games.get, autoGameId && playerId ? { id: autoGameId as any } : "skip");
   useEffect(() => {
     if (autoGame && autoGame.status === "active" && autoGameId) {
+      // Set navigating state before triggering route change so UI can freeze.
+      if (!navigatingGameId) setNavigatingGameId(autoGameId);
       router.push(`/game/${autoGameId}`);
     }
-  }, [autoGame, autoGameId, router]);
+  }, [autoGame, autoGameId, router, navigatingGameId]);
   // Friend invite watcher
   const friendJoined = inviteGame && inviteGame.status === "active";
   useEffect(() => {
-    if (friendJoined && inviteGameId) router.push(`/game/${inviteGameId}`);
-  }, [friendJoined, inviteGameId, router]);
+    if (friendJoined && inviteGameId) {
+      if (!navigatingGameId) setNavigatingGameId(inviteGameId);
+      router.push(`/game/${inviteGameId}`);
+    }
+  }, [friendJoined, inviteGameId, router, navigatingGameId]);
 
   const gameLink = useMemo(() => inviteGameId ? `${window.location.origin}/game/${inviteGameId}` : null, [inviteGameId]);
   useEffect(() => {
@@ -69,12 +75,19 @@ export function Matchmaking() {
   }, [gameLink]);
 
   return (
-    <div className="space-y-8 max-w-md">
+    <div className="space-y-8 max-w-md relative">
+      {navigatingGameId && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/40 backdrop-blur-sm text-center px-6">
+          <div className="animate-spin h-6 w-6 rounded-full border-2 border-white/30 border-t-white" />
+          <p className="text-sm font-medium text-white">Loading game…</p>
+          <p className="text-[11px] text-white/70">Preparing realtime state</p>
+        </div>
+      )}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Start Playing</h2>
         <p className="text-xs text-gray-500">Choose how you want to start a game.</p>
         <p className="text-[11px] text-gray-600">You: {profile ? profile.username : playerId ? playerId.slice(0,8) : '...'}</p>
-        <div className="flex flex-col gap-3">
+  <div className={`flex flex-col gap-3 ${navigatingGameId ? 'opacity-50 pointer-events-none select-none' : ''}`}> 
           <div className="flex flex-col gap-1">
             <button
               className="px-4 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-40 cursor-pointer"
@@ -85,6 +98,8 @@ export function Matchmaking() {
                 try {
                   const { gameId, matched } = await autoMatch({ player: playerId });
                   if (matched) {
+                    // Immediate match (you joined an existing waiting game) – show loading overlay
+                    setNavigatingGameId(String(gameId));
                     router.push(`/game/${gameId}`);
                   } else {
                     setAutoGameId(String(gameId));
