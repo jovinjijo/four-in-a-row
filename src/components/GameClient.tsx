@@ -64,16 +64,20 @@ export default function GameClient({ gameId }: Props) {
         >Join Game</button>
       )}
 
-      <div ref={boardContainerRef} className="flex justify-center w-full px-2">
-        <ResponsiveFourInARowBoard
-          board={game.board}
-          onPlay={handlePlay}
-          canPlay={!!yourTurn}
-          winningCells={game.winningCells}
-          minCell={40}
-          maxCell={72}
-          containerWidth={containerSize.width}
-        />
+      {/* Horizontal scroll wrapper: prevents board from shrinking too small on very narrow side panes */}
+      <div className="w-full px-2 overflow-x-auto">
+        <div ref={boardContainerRef} className="flex justify-center min-w-max">
+          <ResponsiveFourInARowBoard
+            board={game.board}
+            onPlay={handlePlay}
+            canPlay={!!yourTurn}
+            winningCells={game.winningCells}
+            // Use a slightly larger minimum so users can scroll instead of seeing squished discs
+            minCell={40}
+            maxCell={72}
+            containerWidth={containerSize.width}
+          />
+        </div>
       </div>
 
       <div className="text-xs text-gray-500 text-center">
