@@ -1,14 +1,9 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { isWaitingGameExpired as sharedIsExpired } from "../src/shared/expiry";
 
-// TTL (ms) for games that are still in 'waiting' state without a second player.
-const WAITING_GAME_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function isExpiredWaitingGame(game: any): boolean {
-  if (!game) return false;
-  if (game.status !== "waiting") return false;
-  return Date.now() - game.createdAt > WAITING_GAME_TTL_MS && !game.player2;
-}
+// Delegate to shared helper (kept name locally for minimal diff where referenced)
+function isExpiredWaitingGame(game: any): boolean { return sharedIsExpired(game); }
 
 export const list = query({
   args: {},
@@ -121,4 +116,32 @@ export const get = query({
     }
     return game;
   },
+});
+
+export const activeForPlayer = query({
+  args: { player: v.string() },
+  handler: async (ctx, args) => {
+    const p1 = await ctx.db
+      .query("games")
+      .withIndex("by_player1", (q) => q.eq("player1", args.player))
+      .take(100);
+    const p2 = await ctx.db
+      .query("games")
+      .withIndex("by_player2", (q) => q.eq("player2", args.player))
+      .take(100);
+    return [...p1, ...p2].filter(g => g.status === "active");
+  }
+});
+
+export const waitingAutoForPlayer = query({
+  args: { player: v.string() },
+  handler: async (ctx, args) => {
+    // Return a single waiting auto game the player owns (they are player1, no player2 yet)
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_player1", (q) => q.eq("player1", args.player))
+      .take(50);
+    const candidate = games.find(g => g.status === "waiting" && g.mode === "auto" && !g.player2 && !isExpiredWaitingGame(g));
+    return candidate || null;
+  }
 });

@@ -18,7 +18,9 @@ export default defineSchema({
   })
     .index("by_status", ["status"]) // existing
     .index("by_created", ["createdAt"]) // existing
-    .index("by_status_mode", ["status", "mode"]), // for auto-match queries
+    .index("by_status_mode", ["status", "mode"]) // for auto-match queries
+    .index("by_player1", ["player1"]) // for active games per player
+    .index("by_player2", ["player2"]), // for active games per player
   moves: defineTable({
     gameId: v.id("games"),
     player: v.string(),

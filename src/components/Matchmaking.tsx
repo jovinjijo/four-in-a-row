@@ -2,21 +2,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
+import { generateQrDataUrl } from "../shared/qr";
+import { remainingWaitMs } from "../shared/expiry";
 import { useRouter } from "next/navigation";
 
-// Lazy import small QR generation (simple algorithm) to avoid adding heavy deps.
-// We implement a trivial SVG QR via dynamically imported library if added later; for now use a data URI placeholder approach.
-// For correctness & scannability we implement a minimal QR code generator (version auto) using third-party 'qrcode' if available.
-let generateQr: (text: string) => Promise<string>;
-try {
-  // @ts-ignore dynamic optional import
-  generateQr = async (text: string) => {
-    const mod = await import("qrcode");
-    return await mod.toDataURL(text, { width: 256, margin: 1 });
-  };
-} catch {
-  generateQr = async (text: string) => Promise.resolve(`data:text/plain,${encodeURIComponent(text)}`);
-}
+// QR generation handled by shared helper.
 
 export function Matchmaking() {
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -36,21 +26,45 @@ export function Matchmaking() {
   const [loadingFriend, setLoadingFriend] = useState(false);
   const [inviteGameId, setInviteGameId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [autoGameId, setAutoGameId] = useState<string | null>(null);
+  // Auto-match waiting state
+  const waitingAutoGame = useQuery(api.games.waitingAutoForPlayer, playerId ? { player: playerId } : "skip");
+  const activeGames = useQuery(api.games.activeForPlayer, playerId ? { player: playerId } : "skip");
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!waitingAutoGame && !inviteGameId) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [waitingAutoGame, inviteGameId]);
+  // Track auto game id if query finds one (handles refresh)
+  useEffect(() => {
+    if (waitingAutoGame && !autoGameId) setAutoGameId(String(waitingAutoGame._id));
+  }, [waitingAutoGame, autoGameId]);
+  const autoRemainingMs = remainingWaitMs(waitingAutoGame as any, now);
+  const autoRemainingStr = waitingAutoGame ? `${Math.floor(autoRemainingMs/1000)}s` : null;
+  // Friend invite countdown
+  const inviteGame = useQuery(api.games.get, inviteGameId && playerId ? { id: inviteGameId as any } : "skip");
+  const friendRemainingMs = remainingWaitMs(inviteGame as any, now);
+  const friendRemainingStr = inviteGame ? `${Math.floor(friendRemainingMs/1000)}s` : null;
   const editing = !profile;
 
-  // Poll the invite game to detect when friend joins (simple approach: query games.get periodically)
-  const inviteGame = useQuery(api.games.get, inviteGameId && playerId ? { id: inviteGameId as any } : "skip");
-  const friendJoined = inviteGame && inviteGame.status !== "waiting";
+  // Auto-match game watcher
+  const autoGame = useQuery(api.games.get, autoGameId && playerId ? { id: autoGameId as any } : "skip");
   useEffect(() => {
-    if (friendJoined && inviteGameId) {
-      router.push(`/game/${inviteGameId}`);
+    if (autoGame && autoGame.status === "active" && autoGameId) {
+      router.push(`/game/${autoGameId}`);
     }
+  }, [autoGame, autoGameId, router]);
+  // Friend invite watcher
+  const friendJoined = inviteGame && inviteGame.status === "active";
+  useEffect(() => {
+    if (friendJoined && inviteGameId) router.push(`/game/${inviteGameId}`);
   }, [friendJoined, inviteGameId, router]);
 
   const gameLink = useMemo(() => inviteGameId ? `${window.location.origin}/game/${inviteGameId}` : null, [inviteGameId]);
   useEffect(() => {
     if (gameLink) {
-      generateQr(gameLink).then(setQrDataUrl).catch(() => setQrDataUrl(null));
+      generateQrDataUrl(gameLink).then(setQrDataUrl).catch(() => setQrDataUrl(null));
     }
   }, [gameLink]);
 
@@ -59,23 +73,33 @@ export function Matchmaking() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Start Playing</h2>
         <p className="text-xs text-gray-500">Choose how you want to start a game.</p>
+        <p className="text-[11px] text-gray-600">You: {profile ? profile.username : playerId ? playerId.slice(0,8) : '...'}</p>
         <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <button
+              className="px-4 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-40 cursor-pointer"
+              disabled={!playerId || loadingAuto || !!waitingAutoGame || !!autoGameId && autoGame?.status !== 'active'}
+              onClick={async () => {
+                if (!playerId) return;
+                setLoadingAuto(true);
+                try {
+                  const { gameId, matched } = await autoMatch({ player: playerId });
+                  if (matched) {
+                    router.push(`/game/${gameId}`);
+                  } else {
+                    setAutoGameId(String(gameId));
+                  }
+                } finally {
+                  setLoadingAuto(false);
+                }
+              }}
+            >{waitingAutoGame ? "Waiting for Opponent" : loadingAuto ? "Matching..." : "Auto Match"}</button>
+            {waitingAutoGame && (
+              <p className="text-[10px] text-gray-500">Auto-match: waiting… Expires in {autoRemainingStr}</p>
+            )}
+          </div>
           <button
-            className="px-4 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-40"
-            disabled={!playerId || loadingAuto}
-            onClick={async () => {
-              if (!playerId) return;
-              setLoadingAuto(true);
-              try {
-                const { gameId } = await autoMatch({ player: playerId });
-                router.push(`/game/${gameId}`);
-              } finally {
-                setLoadingAuto(false);
-              }
-            }}
-          >{loadingAuto ? "Matching..." : "Auto Match"}</button>
-          <button
-            className="px-4 py-2 rounded bg-green-600 text-white text-sm hover:bg-green-700 disabled:opacity-40"
+            className="px-4 py-2 rounded bg-green-600 text-white text-sm hover:bg-green-700 disabled:opacity-40 cursor-pointer"
             disabled={!playerId || loadingFriend}
             onClick={async () => {
               if (!playerId) return;
@@ -122,12 +146,42 @@ export function Matchmaking() {
         </section>
       )}
 
-      {inviteGameId && (
+      {activeGames && activeGames.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="font-medium text-sm">Your Active Games</h3>
+          <ul className="border rounded divide-y text-xs">
+            {activeGames.map(g => {
+              const p1 = g.player1Name || g.player1.slice(0,8);
+              const p2 = g.player2Name || (g.player2 ? g.player2.slice(0,8) : '—');
+              const youAreP1 = playerId === g.player1;
+              const youAreP2 = playerId === g.player2;
+              return (
+                <li key={g._id} className="p-2 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono">{String(g._id).slice(-6)}</span>
+                    <button
+                      className="underline cursor-pointer hover:text-indigo-600"
+                      onClick={() => router.push(`/game/${g._id}`)}
+                    >Open</button>
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    <span>{youAreP1 ? 'You' : p1}</span>
+                    <span className="mx-1">vs</span>
+                    <span>{youAreP2 ? 'You' : p2}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {inviteGameId && inviteGame && inviteGame.status === 'waiting' && (
         <section className="space-y-3 border rounded p-4 bg-white/5">
           <h3 className="font-medium text-sm">Invite a Friend</h3>
-          <p className="text-xs text-gray-500">Share this link or QR code. Waiting for friend to join...</p>
+          <p className="text-xs text-gray-500">Share this link or QR code. Waiting for friend to join… Expires in {friendRemainingStr}</p>
           {qrDataUrl ? (
-            <img src={qrDataUrl} alt="Game invite QR" className="w-40 h-40 mx-auto border bg-white p-2 rounded" />
+            <img src={qrDataUrl} alt="Game invite QR" className="w-40 h-40 mx-auto border bg-white p-2 rounded cursor-pointer" onClick={() => gameLink && navigator.clipboard.writeText(gameLink)} title="Click to copy link" />
           ) : (
             <div className="w-40 h-40 flex items-center justify-center bg-gray-200 text-gray-500 text-xs mx-auto rounded">QR...</div>
           )}
@@ -140,7 +194,7 @@ export function Matchmaking() {
                 onFocus={(e) => e.currentTarget.select()}
               />
               <button
-                className="self-start text-[10px] underline"
+                className="self-start text-[10px] underline cursor-pointer hover:text-indigo-600"
                 onClick={() => {
                   navigator.clipboard.writeText(gameLink);
                 }}
@@ -149,6 +203,9 @@ export function Matchmaking() {
           )}
           <div className="text-xs text-gray-500">You: {profile ? profile.username : playerId}</div>
         </section>
+      )}
+      {inviteGameId && inviteGame && inviteGame.status !== 'waiting' && (
+        <p className="text-[10px] text-gray-500">Friend joined! Opening game…</p>
       )}
     </div>
   );
