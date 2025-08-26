@@ -4,6 +4,7 @@ declare module 'qrcode' {
     margin?: number;
     color?: { dark?: string; light?: string };
   }
+  export type QrCallback = (err: Error | null, url: string) => void;
   export function toDataURL(text: string, opts?: QRCodeToDataURLOptions): Promise<string>;
-  export function toDataURL(text: string, opts: QRCodeToDataURLOptions, cb: (err: any, url: string) => void): void;
+  export function toDataURL(text: string, opts: QRCodeToDataURLOptions, cb: QrCallback): void;
 }

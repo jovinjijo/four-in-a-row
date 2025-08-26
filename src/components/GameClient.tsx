@@ -2,7 +2,8 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { usePlayerId } from "./usePlayerId";
-import { FourInARowBoard } from "./FourInARowBoard";
+import { FourInARowBoard, ResponsiveFourInARowBoard } from "./FourInARowBoard";
+import { useResizeObserver } from "./useResizeObserver";
 import Link from "next/link";
 import { Id } from "@convex/_generated/dataModel";
 
@@ -15,7 +16,8 @@ export default function GameClient({ gameId }: Props) {
   const moves = useQuery(api.moves.listForGame, game ? { gameId: game._id } : "skip");
   const play = useMutation(api.moves.play);
   const join = useMutation(api.games.join);
-
+  // Important: place resize observer hook before any early returns so hook order stays stable.
+  const { ref: boardContainerRef, size: containerSize } = useResizeObserver<HTMLDivElement>();
   if (!playerId) return <div>Preparing your identity…</div>;
   if (game === undefined) return <div>Loading…</div>;
   if (game === null) return <div>Game not found. <Link href="/">Back</Link></div>;
@@ -62,13 +64,15 @@ export default function GameClient({ gameId }: Props) {
         >Join Game</button>
       )}
 
-      <div className="flex justify-center w-full">
-        <FourInARowBoard
+      <div ref={boardContainerRef} className="flex justify-center w-full px-2">
+        <ResponsiveFourInARowBoard
           board={game.board}
           onPlay={handlePlay}
           canPlay={!!yourTurn}
-          size={64}
           winningCells={game.winningCells}
+          minCell={40}
+          maxCell={72}
+          containerWidth={containerSize.width}
         />
       </div>
 

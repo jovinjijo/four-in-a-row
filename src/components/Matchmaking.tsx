@@ -5,6 +5,8 @@ import { api } from "@convex/_generated/api";
 import { generateQrDataUrl } from "../shared/qr";
 import { remainingWaitMs } from "../shared/expiry";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import type { Id, Doc } from "@convex/_generated/dataModel";
 
 // QR generation handled by shared helper.
 
@@ -41,16 +43,16 @@ export function Matchmaking() {
   useEffect(() => {
     if (waitingAutoGame && !autoGameId) setAutoGameId(String(waitingAutoGame._id));
   }, [waitingAutoGame, autoGameId]);
-  const autoRemainingMs = remainingWaitMs(waitingAutoGame as any, now);
+  const autoRemainingMs = remainingWaitMs(waitingAutoGame ?? null, now);
   const autoRemainingStr = waitingAutoGame ? `${Math.floor(autoRemainingMs/1000)}s` : null;
   // Friend invite countdown
-  const inviteGame = useQuery(api.games.get, inviteGameId && playerId ? { id: inviteGameId as any } : "skip");
-  const friendRemainingMs = remainingWaitMs(inviteGame as any, now);
+  const inviteGame = useQuery(api.games.get, inviteGameId && playerId ? { id: inviteGameId as Id<"games"> } : "skip");
+  const friendRemainingMs = remainingWaitMs(inviteGame ?? null, now);
   const friendRemainingStr = inviteGame ? `${Math.floor(friendRemainingMs/1000)}s` : null;
   const editing = !profile;
 
   // Auto-match game watcher
-  const autoGame = useQuery(api.games.get, autoGameId && playerId ? { id: autoGameId as any } : "skip");
+  const autoGame = useQuery(api.games.get, autoGameId && playerId ? { id: autoGameId as Id<"games"> } : "skip");
   useEffect(() => {
     if (autoGame && autoGame.status === "active" && autoGameId) {
       // Set navigating state before triggering route change so UI can freeze.
@@ -196,7 +198,7 @@ export function Matchmaking() {
           <h3 className="font-medium text-sm">Invite a Friend</h3>
           <p className="text-xs text-gray-500">Share this link or QR code. Waiting for friend to join… Expires in {friendRemainingStr}</p>
           {qrDataUrl ? (
-            <img src={qrDataUrl} alt="Game invite QR" className="w-40 h-40 mx-auto border bg-white p-2 rounded cursor-pointer" onClick={() => gameLink && navigator.clipboard.writeText(gameLink)} title="Click to copy link" />
+            <Image src={qrDataUrl} width={160} height={160} alt="Game invite QR" className="w-40 h-40 mx-auto border bg-white p-2 rounded cursor-pointer" onClick={() => gameLink && navigator.clipboard.writeText(gameLink)} title="Click to copy link" unoptimized />
           ) : (
             <div className="w-40 h-40 flex items-center justify-center bg-gray-200 text-gray-500 text-xs mx-auto rounded">QR...</div>
           )}
