@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { isWaitingGameExpired as sharedIsExpired } from "../src/shared/expiry";
+import { WAITING_GAME_TTL_MS } from "../src/shared/constants";
 import type { Doc, Id } from "./_generated/dataModel";
 
 // Minimal shape used for expiry checks; align with games doc fields accessed in helper
@@ -146,5 +147,83 @@ export const waitingAutoForPlayer = query({
       .take(50);
     const candidate = games.find(g => g.status === "waiting" && g.mode === "auto" && !g.player2 && !isExpiredWaitingGame(g));
     return candidate || null;
+  }
+});
+
+// Resign: active participant ends the game; opponent token becomes winner (if opponent exists).
+export const resign = mutation({
+  args: { gameId: v.id("games"), player: v.string() },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.status !== "active") throw new Error("Game not active");
+    if (game.player1 !== args.player && game.player2 !== args.player) throw new Error("Not a participant");
+    if (!game.player2) {
+      await ctx.db.patch(args.gameId, { status: "finished", winner: undefined, winningCells: undefined });
+      return;
+    }
+    const resigningIsP1 = game.player1 === args.player;
+    const winnerToken = resigningIsP1 ? "Y" : "R"; // opponent token
+    await ctx.db.patch(args.gameId, { status: "finished", winner: winnerToken, winningCells: undefined });
+  }
+});
+
+// Mutual rematch handshake: both players must request within TTL window before a new game is created.
+export const requestRematch = mutation({
+  args: { gameId: v.id("games"), player: v.string() },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.status !== "finished") throw new Error("Game not finished");
+    if (!game.player2) throw new Error("Need two players for rematch");
+    if (game.player1 !== args.player && game.player2 !== args.player) throw new Error("Not a participant");
+    if (game.rematchGameId) return { newGameId: game.rematchGameId };
+    const now = Date.now();
+    const p1Active = !!game.rematchRequestP1At && now - game.rematchRequestP1At < WAITING_GAME_TTL_MS;
+    const p2Active = !!game.rematchRequestP2At && now - game.rematchRequestP2At < WAITING_GAME_TTL_MS;
+    const patch: Partial<Doc<"games">> = {};
+    if (args.player === game.player1) patch.rematchRequestP1At = now; else patch.rematchRequestP2At = now;
+    const willP1 = args.player === game.player1 ? true : p1Active;
+    const willP2 = args.player === game.player2 ? true : p2Active;
+    if (willP1 && willP2) {
+      let startingPlayer: string;
+      if (game.winner) startingPlayer = game.winner === "R" ? game.player1 : game.player2; else startingPlayer = game.currentPlayer === game.player1 ? game.player2 : game.player1;
+      const emptyBoard = Array.from({ length: 6 }, () => Array(7).fill(""));
+      const newId = await ctx.db.insert("games", {
+        createdAt: now,
+        status: "active",
+        mode: game.mode || "friend",
+        currentPlayer: startingPlayer,
+        winner: undefined,
+        board: emptyBoard,
+        player1: game.player1,
+        player2: game.player2,
+        player1Name: game.player1Name,
+        player2Name: game.player2Name,
+        winningCells: undefined,
+        previousGameId: game._id,
+      });
+  patch.rematchGameId = newId; // direct assignment; type matches optional field
+      await ctx.db.patch(args.gameId, patch);
+      return { newGameId: newId };
+    }
+    await ctx.db.patch(args.gameId, patch);
+    return { waiting: true };
+  }
+});
+
+// Cleanup: physically delete expired waiting games (can be invoked ad-hoc or on a schedule)
+export const cleanupExpiredWaiting = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const waiting = await ctx.db.query("games").withIndex("by_status", q => q.eq("status", "waiting")).take(500);
+    let deleted = 0;
+    for (const g of waiting) {
+      if (isExpiredWaitingGame(g)) {
+        await ctx.db.delete(g._id);
+        deleted++;
+      }
+    }
+    return { deleted };
   }
 });

@@ -15,6 +15,10 @@ export default defineSchema({
     player1Name: v.optional(v.string()),
     player2Name: v.optional(v.string()),
     winningCells: v.optional(v.array(v.array(v.number()))), // [[r,c], ...] when a win occurs
+    rematchRequestP1At: v.optional(v.number()), // timestamp of player1 rematch request
+    rematchRequestP2At: v.optional(v.number()), // timestamp of player2 rematch request
+    rematchGameId: v.optional(v.id("games")), // forward link to created rematch game
+    previousGameId: v.optional(v.id("games")), // back link for lineage
   })
     .index("by_status", ["status"]) // existing
     .index("by_created", ["createdAt"]) // existing

@@ -21,6 +21,7 @@ export function Matchmaking() {
   const setUsername = useMutation(api.profiles.setUsername);
   const autoMatch = useMutation(api.games.autoMatch);
   const create = useMutation(api.games.create);
+  const cleanupExpired = useMutation(api.games.cleanupExpiredWaiting);
   const router = useRouter();
   const [nameInput, setNameInput] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -75,6 +76,12 @@ export function Matchmaking() {
       generateQrDataUrl(gameLink).then(setQrDataUrl).catch(() => setQrDataUrl(null));
     }
   }, [gameLink]);
+  // Opportunistic background cleanup (low probability to distribute load)
+  useEffect(() => {
+    if (playerId && Math.random() < 0.15) {
+      cleanupExpired({}).catch(() => {});
+    }
+  }, [playerId, cleanupExpired]);
 
   return (
     <div className="space-y-8 max-w-md relative">

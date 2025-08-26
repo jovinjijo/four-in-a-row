@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes disc-drop {
+  from { transform: translateY(var(--fromY, -200px)); }
+  to { transform: translateY(0); }
+}
+.animate-drop { animation: disc-drop 320ms cubic-bezier(.34,1.2,.4,1); }

@@ -1,6 +1,8 @@
 <div align="center">
 	<h1>four-in-a-row</h1>
 	<p>Realtime Four‑in‑a‑Row built with Next.js (App Router), Convex, Tailwind CSS, and TypeScript – now with matchmaking & QR friend invites.</p>
+  <h3><strong>⚡ VIBE-CODED PROJECT ⚡</strong></h3>
+  <p><em>Fast, pragmatic, playful. Expect lean patterns over ceremony.</em></p>
 </div>
 
 ## Stack
@@ -24,6 +26,8 @@
 * Fully clickable columns (no arrow buttons) with keyboard (Enter / Space) support; ARIA labels for accessibility.
 * Responsive board sizing (observed container width, adjustable min/max cell size + horizontal scroll fallback) for mobile friendliness.
 * Strong TypeScript types (strict mode, no `any`) and isolated shared helpers (TTL, QR, constants).
+* Resign & Mutual Rematch: both players must request within 5‑minute window; winner starts next game (draw alternates starter).
+* Ghost hover preview + animated falling discs for the last move.
 
 ## Architecture Overview
 High-level matchmaking flows:
@@ -164,12 +168,11 @@ Key indexes (see `schema.ts`):
 ## Roadmap / Extension Ideas
 1. Spectator mode polish (read‑only UI cues if not a participant).
 2. Game replay (step through moves, auto/playback).
-3. Explicit resign / rematch actions.
-4. Persistent ranking / ELO once real auth exists.
-5. Scheduled cleanup job (cron) removing expired waiting games physically.
-6. Visual hover previews (ghost disc) on columns.
-7. Test suite: unit tests for `checkWinner`, expiry logic, and matchmaking edge cases.
-8. Horizontal animation for falling discs (currently instant placement).
+3. Persistent ranking / ELO once real auth exists.
+4. Scheduled cleanup job (cron) removing expired waiting games physically (manual mutation exists; automate scheduling).
+5. Test suite: unit tests for `checkWinner`, expiry logic, matchmaking, resign/rematch.
+6. Replay mode & move-by-move animation.
+7. Spectator chat / emoji reactions.
 
 ## Deployment (Vercel Example)
 1. Set `NEXT_PUBLIC_CONVEX_URL` env var in Vercel project settings (from Convex dashboard).
