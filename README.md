@@ -174,9 +174,75 @@ Key indexes (see `schema.ts`):
 6. Replay mode & move-by-move animation.
 7. Spectator chat / emoji reactions.
 
-## Deployment (Vercel Example)
-1. Set `NEXT_PUBLIC_CONVEX_URL` env var in Vercel project settings (from Convex dashboard).
-2. `pnpm build` (CI) → deploy.
+## Deployment
+
+### 1. Convex Production Deployment
+You need a production Convex deployment so clients have a stable URL.
+
+Steps:
+1. Login (one time): `npx convex login` (locally) and follow browser auth.
+2. From project root run: `npx convex deploy` (or add a script `pnpm convex:deploy`). This creates / updates your prod deployment and prints a URL:
+	```
+	https://<your-deployment>.convex.cloud
+	```
+3. Copy that URL into `NEXT_PUBLIC_CONVEX_URL` for production (Vercel dashboard → Project → Settings → Environment Variables).
+4. (Optional) Preview Deployments: You can run `npx convex deploy --preview` to create an isolated preview deployment and set its URL in `NEXT_PUBLIC_CONVEX_URL` for Preview env only.
+
+Environment Matrix Suggestion:
+| Environment | Vercel | Convex | Variable Value |
+|-------------|--------|--------|----------------|
+| Production  | Production Deploy | Production Deploy | `NEXT_PUBLIC_CONVEX_URL=https://<prod>.convex.cloud` |
+| Preview     | Preview Deploy (PR) | Preview Deploy (`--preview`) | `NEXT_PUBLIC_CONVEX_URL=https://<preview>.convex.cloud` |
+| Development | Local `pnpm exec convex dev` | Local Dev | auto‑written to `.env.local` |
+
+### 2. Vercel (Next.js) Deployment
+1. Push repo to GitHub (or GitLab/Bitbucket) and import into Vercel.
+2. Set `NEXT_PUBLIC_CONVEX_URL` in Production (and optionally Preview) envs before the first build.
+3. Build Command: `pnpm build` (Vercel will auto-detect; ensure `pnpm i` first). Output directory: `.next` (default).
+4. No custom server required; standard Next.js 15 output works. Turbopack is dev-only; production build uses Next's compiler.
+5. After deployment, open the URL and verify real-time updates (open two tabs, start a friend game, ensure moves sync).
+
+### 3. Local Production Smoke Test (Optional)
+Simulate production locally before first Vercel deploy:
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm start  # serves optimized Next build
+```
+Point `NEXT_PUBLIC_CONVEX_URL` to either your dev or (safer) preview Convex deployment while testing.
+
+### 4. Updating Schema / Backend After Go-Live
+1. Edit `convex/schema.ts`.
+2. Run locally: `pnpm exec convex dev` to validate & generate types.
+3. Deploy backend changes: `npx convex deploy` (or `--preview` first).
+4. Commit frontend code referencing new fields; push → triggers Vercel build using same URL.
+
+### 5. Rollbacks / Previews
+Use `--preview` deployments to validate risky changes. Point a temporary preview Vercel environment to the preview Convex URL. Once satisfied, redeploy both (Convex prod + Vercel production) referencing the stable production URL.
+
+### 6. Environment Variables Recap
+| Name | Scope | Description |
+|------|-------|-------------|
+| `NEXT_PUBLIC_CONVEX_URL` | Client + Server | Base URL for Convex (must match target deployment). |
+
+No secrets are currently required; identity is still anonymous. Introducing auth later will add secret server-side env vars (e.g. OAuth client secrets) which you would configure in Vercel as non-`NEXT_PUBLIC_` names.
+
+### 7. Common Deployment Pitfalls
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Lobby loads but queries fail | Missing / wrong `NEXT_PUBLIC_CONVEX_URL` | Set correct URL in Vercel env, redeploy |
+| Types mismatch after deploy | Built against stale generated types | Run local `convex dev` before committing changes |
+| Real-time not updating | Using preview Convex with prod Vercel (or vice versa) | Align both to same environment URL |
+| 404 on game pages after deploy | Build succeeded before migrations? (rare) | Ensure schema deployed first, then commit frontend referencing it |
+
+---
+Minimal one-shot production flow (once configured):
+```bash
+npx convex deploy
+pnpm build
+git push origin main  # triggers Vercel build using existing env var
+```
+
 
 ## Common Issues
 | Symptom | Cause | Fix |

@@ -59,6 +59,15 @@ These instructions capture the project-specific context so an AI agent can be pr
 - Game Replay: Query `moves` and simulate board progression client‑side.
 - Auth Integration: Replace ephemeral id with provider (update schema + server validation).
 
+### 6a. Mutual Rematch Handshake (Implemented)
+- Schema fields: `rematchRequestP1At`, `rematchRequestP2At`, `rematchGameId`, `previousGameId`.
+- Mutation `requestRematch` (in `games.ts`) logic:
+  1. Player requests → timestamp stored (P1 or P2 field).
+  2. If both timestamps exist and are < TTL (5 min) create new active game with lineage links.
+  3. Winner of previous game starts; on draw starter alternates from `currentPlayer`.
+- UI shows: request button, waiting state, opponent-request indicator, link to new game once created.
+- Expiry: If only one player requested and TTL passes, second request later restarts handshake with fresh timestamp.
+
 ## 7. Code Style & Conventions
 - TypeScript strict; avoid `any` (use generics, inference, or narrow `unknown`).
 - Client components require `"use client"` at top when using state/effects.
@@ -88,6 +97,44 @@ These instructions capture the project-specific context so an AI agent can be pr
 - Index Strategy: Add narrowly scoped indexes (e.g., composite for status+mode) before writing filtered queries that would scan large sets.
 - Shared Logic: Consolidate expiry / sizing / QR helpers; avoid duplication.
 - Testing (future): Introduce unit tests for `checkWinner` & expiry in a dedicated test folder; keep logic pure to ease testing.
+
+## 11. Deployment Overview
+### Convex (Dev vs Prod)
+- Dev: `pnpm exec convex dev` provisions/uses a dev deployment; updates `.env.local` with `NEXT_PUBLIC_CONVEX_URL` automatically; hot reload + type generation.
+- Prod: `npx convex deploy` (consider script `deploy:convex`). Output URL must be copied into hosting provider env var.
+- Preview: `npx convex deploy --preview` for per-PR ephemeral environments (set Preview env var accordingly).
+
+### Next.js Hosting (Vercel Example)
+1. Add `NEXT_PUBLIC_CONVEX_URL` in Vercel (Production + Preview).
+2. Build step: `pnpm build` (Turbopack dev only; prod uses standard compiler pipeline under the hood).
+3. No custom server needed; standard `next start` semantics.
+
+### Suggested Scripts (if not present)
+```
+"deploy:convex": "convex deploy",
+"deploy:preview": "convex deploy --preview",
+"deploy:check": "pnpm lint && pnpm build"
+```
+
+## 12. Mobile / Touch Hover (Ghost Disc)
+- Ghost preview should appear only for true hover pointers. Use `matchMedia('(hover: hover)')` or pointer events to gate.
+- Planned adjustment (if not yet implemented): store `canHover` in a ref; suppress setting `hoverCol` when `!canHover && pointerType !== 'mouse'`.
+- Optional mobile UX: first tap sets a temporary preview; second tap in same column submits move (currently direct tap triggers move without preview).
+
+## 13. Future Hardening / TODO Seeds
+- Rate limit mutations (e.g., rapid rematch / move spam) – placeholder wrapper or server-side counters.
+- Auth refactor: replace ephemeral ID with stable identity; migrate `profiles.playerId` accordingly.
+- Replay mode: derive frames from `moves` list; animate sequential drops.
+- Background cleanup: schedule periodic invocation of `cleanupExpiredWaiting` (currently opportunistic).
+- Test harness: pure functions for `checkWinner`, expiry logic, and rematch starter selection.
+
+## 14. Assistant Update Guidance
+When introducing changes:
+1. Update schema + run dev to regenerate types.
+2. Document new fields here immediately (avoid drift).
+3. Reflect lifecycle changes (e.g., new game states) in both README and this file.
+4. For UI behavioral tweaks (like touch hover gating) note intent & guard conditions.
+5. Keep deployment section accurate if scripts or env variables evolve.
 
 ---
 If something here drifts from reality after your change, update this file in the same PR to prevent assistant decay.
