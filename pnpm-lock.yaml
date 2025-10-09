@@ -9,22 +9,22 @@ importers:
   .:
     dependencies:
       '@vercel/speed-insights':
-        specifier: ^1.2.0
+        specifier: ^1.2
         version: 1.2.0(next@15.5.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       convex:
         specifier: ^1.27
         version: 1.27.4(react@19.1.0)
       next:
-        specifier: 15.5.0
+        specifier: '15.5'
         version: 15.5.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       qrcode:
-        specifier: ^1.5.4
+        specifier: ^1.5
         version: 1.5.4
       react:
-        specifier: 19.1.0
+        specifier: '19.1'
         version: 19.1.0
       react-dom:
-        specifier: 19.1.0
+        specifier: '19.1'
         version: 19.1.0(react@19.1.0)
     devDependencies:
       '@eslint/eslintrc':
@@ -49,7 +49,7 @@ importers:
         specifier: ^9
         version: 9.37.0(jiti@2.6.1)
       eslint-config-next:
-        specifier: 15.5.0
+        specifier: '15.5'
         version: 15.5.0(eslint@9.37.0(jiti@2.6.1))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
@@ -1017,10 +1017,6 @@ packages:
   define-properties@1.2.1:
     resolution: {integrity: sha512-8QmQKqEASLd5nx0U1B1okLElbUuuttJ/AnYmRXbbbGDWh6uS208EjD4Xqq/I9wK7u0v6O08XhTWnt5XtEbR6Dg==}
     engines: {node: '>= 0.4'}
-
-  detect-libc@2.0.4:
-    resolution: {integrity: sha512-3UDv+G9CsCKO1WKMGw9fwq/SWJYbI0c5Y7LU1AXYoDdbhE2AHQ6N6Nb34sG8Fj7T5APy8qXDCKuuIHd1BR0tVA==}
-    engines: {node: '>=8'}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -2968,9 +2964,6 @@ snapshots:
       has-property-descriptors: 1.0.2
       object-keys: 1.1.1
 
-  detect-libc@2.0.4:
-    optional: true
-
   detect-libc@2.1.2: {}
 
   dijkstrajs@1.0.3: {}
@@ -4012,7 +4005,7 @@ snapshots:
   sharp@0.34.3:
     dependencies:
       color: 4.2.3
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       semver: 7.7.2
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.34.3
