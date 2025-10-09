@@ -20,8 +20,8 @@ export function FourInARowBoard({ board, onPlay, canPlay, size = 56, winningCell
       const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
       const update = () => setSupportsHover(mq.matches);
       update();
-      if (mq.addEventListener) mq.addEventListener('change', update); else if ((mq as any).addListener) (mq as any).addListener(update);
-      return () => { if (mq.removeEventListener) mq.removeEventListener('change', update); else if ((mq as any).removeListener) (mq as any).removeListener(update); };
+      if (mq.addEventListener) mq.addEventListener('change', update);
+      return () => { if (mq.removeEventListener) mq.removeEventListener('change', update); };
     }
   }, []);
   const cell = size;
