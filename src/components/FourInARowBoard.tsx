@@ -13,6 +13,17 @@ export interface FourInARowBoardProps {
 
 export function FourInARowBoard({ board, onPlay, canPlay, size = 56, winningCells, currentPlayerToken, lastMove }: FourInARowBoardProps) {
   const [hoverCol, setHoverCol] = React.useState<number | null>(null);
+  // Detect whether the current primary pointer actually supports hover (exclude touch-only devices)
+  const [supportsHover, setSupportsHover] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+      const update = () => setSupportsHover(mq.matches);
+      update();
+      if (mq.addEventListener) mq.addEventListener('change', update); else if ((mq as any).addListener) (mq as any).addListener(update);
+      return () => { if (mq.removeEventListener) mq.removeEventListener('change', update); else if ((mq as any).removeListener) (mq as any).removeListener(update); };
+    }
+  }, []);
   const cell = size;
   const gap = Math.round(size * 0.1); // dynamic gap
   const cellStyle: React.CSSProperties = { width: cell, height: cell };
@@ -42,8 +53,8 @@ export function FourInARowBoard({ board, onPlay, canPlay, size = 56, winningCell
               role={canPlay ? 'button' : undefined}
               tabIndex={canPlay ? 0 : -1}
               onKeyDown={(e) => { if (canPlay && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPlay(c); } }}
-              onMouseEnter={() => setHoverCol(c)}
-              onMouseLeave={() => setHoverCol(prev => prev === c ? null : prev)}
+              onMouseEnter={() => supportsHover && setHoverCol(c)}
+              onMouseLeave={() => supportsHover && setHoverCol(prev => prev === c ? null : prev)}
             >
               {/* Column cells */}
               {board.map((row, r) => {
@@ -61,7 +72,7 @@ export function FourInARowBoard({ board, onPlay, canPlay, size = 56, winningCell
                 );
               })}
               {/* Ghost preview overlay */}
-              {canPlay && hoverCol === c && ghostRow != null && (
+              {canPlay && supportsHover && hoverCol === c && ghostRow != null && (
                 <div className="absolute inset-0 pointer-events-none flex flex-col items-center" style={{ gap }}>
                   {board.map((_, r) => {
                     if (r !== ghostRow) return <div key={`ghost-spacer-${r}`} style={cellStyle} className="opacity-0" />;
