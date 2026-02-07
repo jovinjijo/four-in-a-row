@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "convex:dev": "convex dev",
-    "dev:all": "concurrently -k -n web,convex \"next dev --turbopack\" \"convex dev\""
+    "dev:all": "concurrently -k -n web,convex \"next dev --turbopack\" \"convex dev\"",
+    "deploy:convex": "convex deploy"
   },
   "dependencies": {
     "@vercel/speed-insights": "^1.3.1",
